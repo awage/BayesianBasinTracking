@@ -1,5 +1,44 @@
 # BayesianBasinTracking
 
+Code and figures for
+
+> *Bayesian Basin Tracking: Efficient Global Continuation of Multistable Dynamical Systems*
+> P. Haerter, A. Wagemakers, A. Daza, G. Datseris, M. A. F. Sanjuán — [arXiv:2607.14762](https://arxiv.org/abs/2607.14762)
+
+## Summary
+
+Mapping the basins of a multistable system at every parameter value is expensive, because
+each parameter is usually sampled from scratch. Basin boundaries, however, move slowly:
+what was learned at one parameter is a good prior for the next. Bayesian Basin Tracking
+exploits this by tiling the region of interest into boxes and giving each box a
+Dirichlet–multinomial posterior over which attractors it contains. Along a continuation the
+posteriors are carried forward with a forgetting factor λ and updated with a sparse sample
+of initial conditions. A log Bayes factor η per box compares the carried-over prior against
+the fresh data; a negative η means the box's history no longer explains what it sees, and
+triggers a dense re-sample there. Bifurcations are thus detected automatically and paid for
+only where and when they happen, giving the full basin fractions and basin entropy — with
+posterior error bars — from a fraction of the usual simulations (an almost sixfold speed-up
+on a 300-dimensional Rössler network).
+
+The sampler itself (`BayesianUpdateSampler`, tiling, sampling, η, panic logic) lives
+upstream in [Attractors.jl](https://github.com/JuliaDynamics/Attractors.jl). This repository
+holds what is specific to the paper:
+
+- `src/inference_stuff.jl` — estimators over the sampler's posteriors: basin entropy and its
+  exact Dirichlet variance (Wolpert & Wolf 1995), basin volumes and their variances, and
+  `bayes_estimates` to map them over a whole sweep.
+- `scripts/henon_estimation.jl` — Hénon map, reference example and comparison against a
+  vanilla continuation (Fig. 2).
+- `scripts/duffing_estimation.jl` — driven Duffing oscillator via its stroboscopic map (Fig. 3).
+- `scripts/rossler_fig_4ab.jl`, `scripts/rossler_fig4c.jl`, `scripts/rossler_K_sweep_helper.jl`
+  — network of 300 coupled Rössler oscillators: basin of synchrony vs. coupling `K` against
+  brute-force Monte Carlo, the alarm η, and the dependence on the rewiring probability `p`
+  (Fig. 4).
+
+Results land in `plots/`, cached simulations in `data/`.
+
+## Reproducing
+
 This code base is using the [Julia Language](https://julialang.org/) and
 [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/)
 to make a reproducible scientific project named

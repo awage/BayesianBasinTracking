@@ -22,18 +22,7 @@ on a 300-dimensional Rössler network).
 
 The sampler itself (`BayesianUpdateSampler`, tiling, sampling, η, panic logic) lives
 upstream in [Attractors.jl](https://github.com/JuliaDynamics/Attractors.jl). This repository
-holds what is specific to the paper:
-
-- `src/inference_stuff.jl` — estimators over the sampler's posteriors: basin entropy and its
-  exact Dirichlet variance (Wolpert & Wolf 1995), basin volumes and their variances, and
-  `bayes_estimates` to map them over a whole sweep.
-- `scripts/henon_estimation.jl` — Hénon map, reference example and comparison against a
-  vanilla continuation (Fig. 2).
-- `scripts/duffing_estimation.jl` — driven Duffing oscillator via its stroboscopic map (Fig. 3).
-- `scripts/rossler_fig_4ab.jl`, `scripts/rossler_fig4c.jl`, `scripts/rossler_K_sweep_helper.jl`
-  — network of 300 coupled Rössler oscillators: basin of synchrony vs. coupling `K` against
-  brute-force Monte Carlo, the alarm η, and the dependence on the rewiring probability `p`
-  (Fig. 4).
+holds what is specific to the paper.
 
 Results land in `plots/`, cached simulations in `data/`.
 

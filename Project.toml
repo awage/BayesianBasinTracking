@@ -14,6 +14,9 @@ ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
+[sources]
+Attractors = {path = "../Attractors.jl"}
+
 [compat]
 DrWatson = "2.18.0"
 julia = "1.11.7"

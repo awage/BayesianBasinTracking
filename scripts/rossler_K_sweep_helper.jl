@@ -8,12 +8,6 @@ two sweeps over the coupling `K` at fixed rewiring probability `p`.
     ẏᵢ =  xᵢ + a yᵢ
     żᵢ =  b  + zᵢ(xᵢ − c)
 
-
-## The basin map is binary
-
-There are no attractors to find here, and no reason to find them: the question is
-whether a trajectory synchronizes, which is one bit per initial condition. So
-`RosslerSyncMap` integrates for a fixed time, measures the Golomb–Rinzel coherence, and
 """
 
 using DrWatson
@@ -82,27 +76,29 @@ struct RosslerSyncMap{DS <: DynamicalSystem} <: BasinMap
     ds::DS
     N::Int
     r_thresh::Float64
-    Ttr::Float64            # transient, discarded
-    T::Float64              # time the coherence is measured over
+    Ttr::Float64            
+    T::Float64              
 end
 
 function (bmap::RosslerSyncMap)(u0)
-    # only the x-components are needed, and `container = Vector` keeps the record out of
-    # `SVector{N}`, which for a network of this size is not worth compiling
     X, = trajectory(bmap.ds, bmap.T, u0;
         Ttr = bmap.Ttr, Δt = 1.0, save_idxs = 1:bmap.N, container = Vector,
     )
-    # an integration that blew up says nothing about synchrony; `trajectory` pads the rest
-    # of the record with the last state, which could well look coherent
+    # an integration that blew up says nothing about synchrony
     successful_step(bmap.ds) || return -1
     R = golomb_rinzel_coherence(Matrix(X))
     return (isnan(R) || R ≤ bmap.r_thresh) ? -1 : 1
 end
 
+# The `BasinMap` developer interface, see `Attractors/src/mapping/basin_map.jl`. The map
+# labels an initial condition without ever locating an attractor, so the set it extracts
+# is always empty.
 Attractors._extract_attractors(::RosslerSyncMap) = Dict{Int, StateSpaceSet}()
 Attractors.reset_mapper!(::RosslerSyncMap) = nothing
+Attractors.referenced_dynamical_system(bmap::RosslerSyncMap) = bmap.ds
+Attractors.can_map_individual_ic(::RosslerSyncMap) = true
+Attractors.is_parallelizable(::RosslerSyncMap) = true
 
-"One basin map, carrying its own system — the continuation re-parameterises it in place."
 function sync_map(N, a, b, c, K, L, r_thresh, T_transient, T_measure)
     par = RosslerParams(N, a, b, c, K, L)
     diffeq = (alg = Vern9(), adaptive = false, dt = 0.1, maxiters = Int(1e8))
@@ -138,15 +134,12 @@ function ksweep_once(L, K_range, N, a, b, c, r_thresh, T_transient, T_measure,
                      sparse_n, dense_n, n_tiles, λ, β)
     bmap = sync_map(N, a, b, c, first(K_range), L, r_thresh, T_transient, T_measure)
 
-    # `history = true` is what makes the estimators recoverable afterwards: without it
-    # the sampler overwrites `alphas` and `etas` at every parameter.
     sampler = BayesianUpdateSampler(global_region(N), n_tiles;
         sparse_n, dense_n, λ, β, seed = 20260802, history = true,
     )
 
     pcurve = [Dict(:K => K) for K in K_range]
 
-    # The matcher is never called (no attractors), so its configuration is irrelevant.
     fractions, attractors = global_continuation(
         AttractorSeedContinueMatch(bmap), pcurve, sampler,
     )
@@ -219,14 +212,24 @@ function rossler_Ksweep_montecarlo(d)
     region = global_region(N_osc)
     sync_fracs = zeros(length(K_range))
     for (i, K) in enumerate(K_range)
-        # one map per thread: each carries its own integrator, which it mutates
-        bmaps = [sync_map(N_osc, a_ros, b_ros, c_ros, K, L,
-                          r_thresh, T_transient, T_measure) for _ in 1:Threads.nthreads()]
+        # One map per task, each carrying its own integrator, which it mutates. Not one
+        # per thread indexed by `threadid()`: that index is not bounded by `nthreads()`
+        # when julia runs with an interactive thread pool, and a task may migrate between
+        # threads anyway, which would have two of them sharing an integrator.
         labels = zeros(Int, n_mc)
-        @showprogress @Threads.threads for j in 1:n_mc
-            u0 = [lo + rand() * (hi - lo) for (lo, hi) in region]
-            labels[j] = bmaps[Threads.threadid()](u0)
+        prog = Progress(n_mc)
+        @sync for idxs in Iterators.partition(1:n_mc, cld(n_mc, Threads.nthreads()))
+            Threads.@spawn begin
+                bmap = sync_map(N_osc, a_ros, b_ros, c_ros, K, L,
+                                r_thresh, T_transient, T_measure)
+                for j in idxs
+                    u0 = [lo + rand() * (hi - lo) for (lo, hi) in region]
+                    labels[j] = bmap(u0)
+                    next!(prog)
+                end
+            end
         end
+        finish!(prog)
         sync_fracs[i] = count(==(1), labels) / n_mc
         println("  K=$(round(K, digits = 4))  sync_frac=$(round(sync_fracs[i], digits = 3))")
     end

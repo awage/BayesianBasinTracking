@@ -40,16 +40,12 @@ function duffing_bayes_continuation(params)
     bmap = BasinMapRecurrences(smap, grid_rec;
         consecutive_recurrences = 1000, show_progress = false)
 
-    # `history = true` is what makes the estimators recoverable afterwards: without it
-    # the sampler overwrites `alphas` and `etas` at every parameter.
     sampler = BayesianUpdateSampler(global_bounds, n_tiles;
-        sparse_n, dense_n, λ, β, seed = 20260802, history = true,
+        sparse_n, dense_n, λ, β, seed = 20260802, history = true, global_reset = false
     )
 
-    # Index 3 of `[d, F, ω]` is the swept parameter.
     pcurve = [Dict(3 => ω) for ω in ω_range]
 
-    # Hausdorff with an infinite threshold
     algo = RecurrencesFindAndMatch(bmap; distance = Hausdorff(), threshold = Inf)
     fractions, attractors = global_continuation(algo, pcurve, sampler)
 
@@ -66,7 +62,7 @@ end
 # Bayesian entropy monitoring params
 λ = 0.7
 β = 0.5
-sparse_n = 20
+sparse_n = 15
 dense_n = sparse_n^2
 
 n_tiles = 15
@@ -78,7 +74,7 @@ d = 0.2; F = 0.2    # smooth boundary
 # Sweep the driving frequency
 ωi = 0.2
 ωf = 1.5
-len = 200
+len = 50
 ω_range = range(ωi, ωf, length = len)
 
 params = @strdict ω_range d F sparse_n dense_n n_tiles global_bounds λ β
